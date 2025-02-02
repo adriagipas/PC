@@ -1,0 +1,6 @@
+[submodule "py/IA32"]
+	path = py/IA32
+	url = https://github.com/adriagipas/IA32.git
+[submodule "py/CD"]
+	path = py/CD
+	url = https://github.com/adriagipas/CD.git
