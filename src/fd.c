@@ -2011,7 +2011,9 @@ PC_fd_insert_floppy (
   _state.files[drv].head_ready= false;
   
   // Comprova si la grandària és correcta i assigna grandàries.
-  if ( file->nbytes < 0 || file->nbytes%512 != 0 )
+  if ( file == NULL )
+    ret= PC_NOERROR;
+  else if ( file->nbytes < 0 || file->nbytes%512 != 0 )
     ret= PC_FD_WRONG_SIZE;
   else
     {
