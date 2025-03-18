@@ -222,7 +222,6 @@ static struct
       uint8_t val;
       // DDC2B/EEPROM
     }       r8;
-    uint8_t r10;
     struct
     {
       uint8_t val;
@@ -253,6 +252,7 @@ static struct
       uint8_t num;
       uint8_t den;
     }       vclk[4];
+    uint8_t scratch_pad[4];
   } SR;
   struct
   {
@@ -408,6 +408,7 @@ static struct
       bool    compatibility_cga_mode;
     }        mode;
     uint8_t  line_compare;
+    uint8_t  interlace_end;
     struct
     {
       uint8_t  val;
@@ -448,6 +449,12 @@ static struct
       bool    video_window_master_enabled;
     } vid_win_master_ctrl;
     uint8_t vid_win_vend;
+    struct
+    {
+      uint8_t val;
+      uint16_t vid_win_vstart_overflow;
+      uint16_t vid_win_vend_overflow;
+    } vid_win_vover;
   } CR;
   struct
   {
@@ -907,7 +914,26 @@ port_read16 (
              uint16_t       *data
              )
 {
-  return false;
+
+  bool ret;
+
+
+  ret= true;
+  switch ( port )
+    {
+
+    case 0x3c4:
+      *data=
+        ((uint16_t) _regs.SR.index) |
+        (((uint16_t) SR_read ( true ))<<8)
+        ;
+      break;
+      
+    default: ret= false;
+    }
+  
+  return ret;
+  
 } // end port_read16
 
 
@@ -1894,7 +1920,8 @@ SR_write (
       _regs.SR.mem_mode.odd_even_mode= ((data&0x04)==0);
       _regs.SR.mem_mode.extended_memory= ((data&0x02)!=0);
       break;
-      
+    case 0x05: // Unused
+      break;
     case 0x06: // Key
       _regs.SR.r6_key= data&0x17;
       break;
@@ -1906,12 +1933,14 @@ SR_write (
       break;
     case 0x08: // DDC2B/EEPROM Control
       _regs.SR.r8.val= data;
-      if ( _regs.SR.r8.val&0x7F != 0 )
+      if ( (_regs.SR.r8.val&0x7f) != 0 )
         PC_MSGF("SVGA - SR8: DDC2B/ERPROM CONTROL: %X\n",_regs.SR.r8.val);
       break;
-      
+    case 0x09: // Scratch pad 0
+      _regs.SR.scratch_pad[0]= data;
+      break;
     case 0x0a: // Scratch pad 1
-      _regs.SR.r10= data;
+      _regs.SR.scratch_pad[1]= data;
       break;
     case 0x0b ... 0x0e: // VCLK Numerator
       _regs.SR.vclk[_regs.SR.index-0x0b].num= data;
@@ -1936,6 +1965,12 @@ SR_write (
       break;
     case 0x13: // Graphics Cursor Pattern Address Offset
       _regs.SR.r13_cursor_pat_addr_off= data;
+      break;
+    case 0x14: // Scratch pad 2
+      _regs.SR.scratch_pad[2]= data;
+      break;
+    case 0x15: // Scratch pad 3
+      _regs.SR.scratch_pad[3]= data;
       break;
 
     case 0x17: // Configuration Readback and Extended Control
@@ -2020,16 +2055,20 @@ SR_read (
     case 0x04: // Sequencer memory mode
       ret= _regs.SR.mem_mode.val;
       break;
-
+    case 0x05: // Unused
+      ret= 0xff;
+      break;
     case 0x06: // Key
       ret= _regs.SR.r6_key==0x12 ? 0x12 : 0xff;
       break;
     case 0x07: // Extended Sequencer Mode
       ret= _regs.SR.r7.val;
       break;
-
+    case 0x09: // Scratch Pad 0
+      ret= _regs.SR.scratch_pad[0];
+      break;
     case 0x0a: // Scratch Pad 1
-      ret= _regs.SR.r10;
+      ret= _regs.SR.scratch_pad[1];
       break;
     case 0x0b ... 0x0e: // VCLK Numerator
       ret= _regs.SR.vclk[_regs.SR.index-0x0b].num;
@@ -2046,7 +2085,13 @@ SR_read (
     case 0x13: // Graphics Cursor Pattern Address Offset
       ret= _regs.SR.r13_cursor_pat_addr_off;
       break;
-
+    case 0x14: // Scratch Pad 2
+      ret= _regs.SR.scratch_pad[2];
+      break;
+    case 0x15: // Scratch Pad 3
+      ret= _regs.SR.scratch_pad[3];
+      break;
+      
     case 0x17: // Configuration Readback and Extended Control
       ret= _regs.SR.r17.val;
       break;
@@ -2225,7 +2270,9 @@ CR_write (
       _regs.CR.line_compare= data;
       PC_MSGF("SVGA - CR18 : CRTC Line Compare: %X",_regs.CR.line_compare);
       break;
-      
+    case 0x19: // Interlace End
+      _regs.CR.interlace_end= data;
+      break;
     case 0x1a: // Miscellaneous Control
       _regs.CR.misc_ctrl.val= data;
       _regs.CR.misc_ctrl.vblank_end= ((uint16_t) (data>>6))<<8;
@@ -2282,9 +2329,19 @@ CR_write (
         PC_MSGF("SVGA - CR1D : DAC Mode Switching Control %X",
                 _regs.CR.ov_ext_ctrl.dac_mode_switch);
       break;
+
+    case 0x1f: // Unused
+      break;
       
     case 0x38: // Video Window Vertical End
       _regs.CR.vid_win_vend= data;
+      break;
+    case 0x39: // Video Window Vertical Overflow
+      _regs.CR.vid_win_vover.val= data;
+      _regs.CR.vid_win_vover.vid_win_vend_overflow=
+        (((uint16_t) ((data>>2)&0x3))<<8);
+      _regs.CR.vid_win_vover.vid_win_vstart_overflow=
+        (((uint16_t) (data&0x3))<<8);
       break;
       
     case 0x3e: // Video Window Master Control
@@ -2412,7 +2469,9 @@ CR_read (
     case 0x18: // CRTC Line Compare
       ret= _regs.CR.line_compare;
       break;
-      
+    case 0x19: // Interlace End
+      ret= _regs.CR.interlace_end;
+      break;
     case 0x1a: // Miscellaneous Control
       ret= _regs.CR.misc_ctrl.val;
       break;
@@ -2426,6 +2485,17 @@ CR_read (
 
     case 0x1f: // Unused
       ret= 0xff;
+      break;
+
+    case 0x38: // Video Window Vertical End
+      ret= _regs.CR.vid_win_vend;
+      break;
+    case 0x39: // Video Window Vertical Overflow
+      ret= _regs.CR.vid_win_vover.val;
+      break;
+      
+    case 0x3e: // Video Window Master Control
+      ret= _regs.CR.vid_win_master_ctrl.val;
       break;
       
     default:
@@ -3433,6 +3503,7 @@ init_regs (void)
   _regs.SR.index= 6; SR_write ( 0x0f, false, false );
   _regs.SR.index= 7; SR_write ( 0x00, false, false );
   _regs.SR.index= 8; SR_write ( 0x00, false, false );
+  _regs.SR.index= 0x9; SR_write ( 0x00, false, false );
   _regs.SR.index= 0xa; SR_write ( 0x00, false, false );
   _regs.SR.index= 0xb; SR_write ( 0x66, false, false );
   _regs.SR.index= 0xc; SR_write ( 0x5b, false, false );
@@ -3441,6 +3512,8 @@ init_regs (void)
   _regs.SR.index= 0xf; SR_write ( 0x00, false, false );
   _regs.SR.index= 0x12; SR_write ( 0x00, false, false ); // Default 0x00 ???
   _regs.SR.index= 0x13; SR_write ( 0x00, false, false ); // Default 0x00 ???
+  _regs.SR.index= 0x14; SR_write ( 0x00, false, false );
+  _regs.SR.index= 0x15; SR_write ( 0x00, false, false );
   _regs.SR.index= 0x1b; SR_write ( 0x3b, false, false );
   _regs.SR.index= 0x1c; SR_write ( 0x2f, false, false );
   _regs.SR.index= 0x1d; SR_write ( 0x30, false, false );
@@ -3485,10 +3558,12 @@ init_regs (void)
   _regs.CR.index= 0x16; CR_write ( 0x00, false );
   _regs.CR.index= 0x17; CR_write ( 0x00, false );
   _regs.CR.index= 0x18; CR_write ( 0x00, false );
+  _regs.CR.index= 0x19; CR_write ( 0x00, false );
   _regs.CR.index= 0x1a; CR_write ( 0x00, false );
   _regs.CR.index= 0x1b; CR_write ( 0x00, false );
   _regs.CR.index= 0x1d; CR_write ( 0x00, false );
   _regs.CR.index= 0x38; CR_write ( 0x00, false );
+  _regs.CR.index= 0x39; CR_write ( 0x00, false );
   _regs.CR.index= 0x3e; CR_write ( 0x04, false );
   _regs.CR.index= 0;
   _regs.AR.mode_data= true; _regs.AR.index= 0x10; AR_write ( 0x00, false );

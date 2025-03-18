@@ -599,6 +599,7 @@ port_read8 (
     case 0x038a:
     case 0x038b:
     case 0x03cd:
+    case 0x03de:
     case 0x03df:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
