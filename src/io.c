@@ -464,7 +464,10 @@ port_read8 (
       ret= PC_sb16_dsp_read_data ();
       PC_Clock+= _delay_ISA;
       break;
-      
+    case 0x022b:
+      _warning ( _udata, "port_read8 - port %04X desconegut", port );
+      ret= 0xFF;
+      break;
     case 0x022c:
       ret= PC_sb16_dsp_write_buffer_status ();
       PC_Clock+= _delay_ISA;
@@ -482,11 +485,14 @@ port_read8 (
       // ¿¿???
     case 0x0236:
     case 0x023a:
+    case 0x023b:
     case 0x0246:
     case 0x0248:
     case 0x024a:
+    case 0x024b:
     case 0x0256:
     case 0x025a:
+    case 0x026b:
     case 0x0273:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
@@ -505,14 +511,20 @@ port_read8 (
       PC_MSG("LPT2 - CONTROL REGISTER R.8");
       ret= 0xFF;
       break;
+    case 0x027b:
+      _warning ( _udata, "port_read8 - port %04X desconegut", port );
+      ret= 0xFF;
+      break;
 
       // Sound blaster 16 - CONF 280h
+    case 0x0282:
     case 0x0288:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
       break;
 
       // ???
+    case 0x02a2:
     case 0x02c8:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
@@ -534,6 +546,7 @@ port_read8 (
       ret= 0xFF;
       break;
 
+    case 0x0300: // ??
     case 0x0327:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
@@ -542,6 +555,11 @@ port_read8 (
       // Sound Blaster 16 (MIDI)
     case 0x0330:
       PC_MSG("port_read8 - MIDI DATA (0330) no implementat");
+      ret= 0xFF;
+      PC_Clock+= _delay_ISA;
+      break;
+    case 0x0331:
+      PC_MSG("port_read8 - MIDI STATUS (0331) no implementat");
       ret= 0xFF;
       PC_Clock+= _delay_ISA;
       break;
@@ -736,6 +754,20 @@ port_read16 (
     case 0x0224:
       ret= 0x00ff | (((uint16_t) PC_sb16_mixer_read_data ())<<8);
       PC_Clock+= _delay_ISA;
+      break;
+
+      // Sound blaster 16 - CONF 280h
+    case 0x0282:
+    case 0x0292:
+      _warning ( _udata, "port_read16 - port %04X desconegut", port );
+      ret= 0xffff;
+      break;
+
+      // ¿¿¿?????
+    case 0x02a2:
+    case 0x02b2:
+      _warning ( _udata, "port_read16 - port %04X desconegut", port );
+      ret= 0xffff;
       break;
       
       // CONFDATA -  CONFIGURATION DATA REGISTER
@@ -1068,7 +1100,10 @@ port_write8_base (
       PC_sb16_dsp_reset ( data );
       PC_Clock+= _delay_ISA;
       break;
-
+    case 0x0227:
+      _warning ( _udata, "port_write8 - port %04X desconegut (data: %02X)",
+                 port, data);
+      break;
     case 0x0228:
       PC_sb16_fm_set_addr ( data, 0 );
       PC_Clock+= _delay_ISA;
@@ -1097,10 +1132,14 @@ port_write8_base (
       
       // ????
     case 0x0236:
+    case 0x0237:
     case 0x023a:
     case 0x0246:
+    case 0x0247:
     case 0x024b:
     case 0x0256:
+    case 0x0267:
+    case 0x0277:
       _warning ( _udata, "port_write8 - port %04X desconegut (data: %02X)",
                  port, data);
       break;

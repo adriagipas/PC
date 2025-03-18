@@ -216,7 +216,12 @@ static struct
       bool    linear_frame_buffer_enabled;
       int     srt;
       bool    extended_display_modes_enabled;
-    }       r7;       
+    }       r7;
+    struct
+    {
+      uint8_t val;
+      // DDC2B/EEPROM
+    }       r8;
     uint8_t r10;
     struct
     {
@@ -1899,6 +1904,11 @@ SR_write (
       _regs.SR.r7.srt= (data>>1)&0x7;
       _regs.SR.r7.extended_display_modes_enabled= ((data&0x1)!=0);
       break;
+    case 0x08: // DDC2B/EEPROM Control
+      _regs.SR.r8.val= data;
+      if ( _regs.SR.r8.val&0x7F != 0 )
+        PC_MSGF("SVGA - SR8: DDC2B/ERPROM CONTROL: %X\n",_regs.SR.r8.val);
+      break;
       
     case 0x0a: // Scratch pad 1
       _regs.SR.r10= data;
@@ -2674,6 +2684,13 @@ AR_write (
           _regs.AR.color_select= data&0x0F;
           PC_MSGF("SVGA - AR14 : Color Bit C : %X",_regs.AR.color_select);
           break;
+
+          /*
+        case 0x16: // ??
+          _warning ( _udata, "SVGA AR.%x=%X - registre desconegut",
+                     _regs.AR.index, data );
+          break;
+          */
         default:
           PC_MSGF ( "SVGA AR.%x=%X write falta"
                     " implementar !!!!",
@@ -3415,6 +3432,7 @@ init_regs (void)
   _regs.SR.index= 4; SR_write ( 0x00, false, false );
   _regs.SR.index= 6; SR_write ( 0x0f, false, false );
   _regs.SR.index= 7; SR_write ( 0x00, false, false );
+  _regs.SR.index= 8; SR_write ( 0x00, false, false );
   _regs.SR.index= 0xa; SR_write ( 0x00, false, false );
   _regs.SR.index= 0xb; SR_write ( 0x66, false, false );
   _regs.SR.index= 0xc; SR_write ( 0x5b, false, false );

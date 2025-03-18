@@ -586,6 +586,7 @@ static struct
     // no em queda clar la relació entre els dos. Així que he decidit
     // fer els càlculs en l'operació.
     double  freq;
+    double  ifreq;
     double  ratio; // freq/44100
     bool    mono;
     enum {
@@ -2225,6 +2226,7 @@ dsp_reset (void)
   _dsp.block_transfer_size= 0;
   //_dsp.format.timec_reg= 0x00;
   _dsp.format.freq= 44100; // ????????????
+  _dsp.format.ifreq= 44100; // ????????????
   _dsp.format.mono= true;
   _dsp.format.type= DSP_FORMAT_U8;
   _dsp.adpcm.started= false;
@@ -2617,7 +2619,12 @@ dsp_run_command (void)
       _dsp.format.freq= (double) tmp16;
       dsp_update_format ();
       break;
-
+    case 0x42: // Set digitized sound input sampling rate
+      tmp16= (((uint16_t) _dsp.in.args[0])<<8) | ((uint16_t) _dsp.in.args[1]);
+      _dsp.format.ifreq= (double) tmp16;
+      dsp_update_format ();
+      break;
+      
     case 0x45: // ¿¿??
       _warning ( _udata, "SB16 DSP: unsupported command 0x45" );
       break;
@@ -2848,6 +2855,7 @@ dsp_write (
           // 2 arg
         case 0x14:
         case 0x41:
+        case 0x42:
         case 0x48:
         case 0x74:
         case 0x75:
@@ -3331,7 +3339,21 @@ mixer_read_data (void)
         ((_mixer.midi_vol_r>>1)&0xf)
         ;
       break;
+      
+    case 0x28: // CD volume.L / CD volume.R (Versió 4bit)
+      ret=
+        (((_mixer.cd_vol_l>>1)&0xf)<<4) |
+        ((_mixer.cd_vol_r>>1)&0xf)
+        ;
+      break;
 
+    case 0x2e: // Line volume.L / Line volume.R (Versió 4bit)
+      ret=
+        (((_mixer.line_vol_l>>1)&0xf)<<4) |
+        ((_mixer.line_vol_r>>1)&0xf)
+        ;
+      break;
+      
     case 0x30: // Master.L
       ret= (_mixer.master_vol_l<<3);
       break;
@@ -3444,6 +3466,10 @@ mixer_write_data (
   switch ( _mixer.addr )
     {
 
+    case 0x00: // Reset Mixer
+      mixer_reset ();
+      break;
+      
     case 0x02: // No s'empra en SB16 (és de SBPro)
       break;
       
@@ -3474,6 +3500,11 @@ mixer_write_data (
     case 0x26: // MIDI volume.L / MIDI volume.R (Versió 4bit)
       _mixer.midi_vol_l= ((data>>4)&0xf)<<1;
       _mixer.midi_vol_r= (data&0xf)<<1;
+      break;
+
+    case 0x28: // CD volume.L / CD volume.R (Versió 4bit)
+      _mixer.cd_vol_l= ((data>>4)&0xf)<<1;
+      _mixer.cd_vol_r= (data&0xf)<<1;
       break;
       
     case 0x2e: // Line volume.L / Line volume.R (Versió 4bit)
