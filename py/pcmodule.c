@@ -2102,7 +2102,7 @@ PC_init_module (
           .dev= PC_PCI_DEVICE_NULL
         }
       },
-      .cpu_model= IA32_CPU_P5_60MHZ,
+      .cpu_model= IA32_CPU_P5_66MHZ,
       .diskettes= {
         PC_DISKETTE_1M44,
         PC_DISKETTE_1M2,

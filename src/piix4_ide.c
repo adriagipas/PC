@@ -1588,15 +1588,33 @@ cdrom_readlb (
       exit(EXIT_FAILURE);
     }
   mode= buf[15];
-  if ( mode != 1 )
+  if ( mode == 1 )
+    {
+      for ( i= 16; i < 2064; i++ )
+        drv->cdrom.buflb.v[i-16]= buf[i];
+      drv->cdrom.buflb.p= 0;
+      drv->cdrom.buflb.l= 2048;
+    }
+  else if ( mode == 2 )
+    {
+      if ( (buf[0x12]&0x20) == 0 ) // Form 1
+        {
+          for ( i= 0x18; i < 0x818; i++ )
+            drv->cdrom.buflb.v[i-0x18]= buf[i];
+          drv->cdrom.buflb.p= 0;
+          drv->cdrom.buflb.l= 2048;
+        }
+      else
+        {
+          PC_MSG("piix4_ide.c - cdrom_readlb: FORM 2");
+          exit(EXIT_FAILURE);
+        }
+    }
+  else
     {
       PC_MSGF("piix4_ide.c - cdrom_readlb: mode %02X",mode);
       exit(EXIT_FAILURE);
     }
-  for ( i= 16; i < 2064; i++ )
-    drv->cdrom.buflb.v[i-16]= buf[i];
-  drv->cdrom.buflb.p= 0;
-  drv->cdrom.buflb.l= 2048;
   
   return true;
   
