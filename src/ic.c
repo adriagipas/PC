@@ -123,8 +123,7 @@ input_changed (
   id= irq/8;
   mask= (0x1<<(irq%8));
   // Comprova edge/triggered
-  if ( (_s[id].IMR&mask)==0x00 && (_elcr[id]&mask)==0x00 &&
-       (_s[id].input&mask)==0x00 && in )
+  if ( (_elcr[id]&mask)==0x00 && (_s[id].input&mask)==0x00 && in )
     _s[id].IRR|= mask;
   if ( in ) _s[id].input|= mask;
   else      _s[id].input&= ~mask;
@@ -223,19 +222,18 @@ update_out_fully_nested (
   uint8_t mask;
   bool out;
   
-  
-  // Comprova level triggered
-  // NOTA!! Si el mode level triggered està activat i el inpit és 0 la
-  // IRR es fica a 0 ??????
+
+  // NOTA!! ara que el IMR s'aplica a l'eixida del IRR, com ha de
+  // ser, tal vegada es podria moure el IRR a input_changed. Però per
+  // si de cas ho deixe ací.
   mask= 0x01;
   for ( i= 0; i < 8; ++i )
     {
-      if ( (_s[id].IMR&mask)==0x00 && (_elcr[id]&mask)!=0x00 &&
-           (_s[id].input&mask)!=0x00 )
+      if ( (_elcr[id]&mask)!=0x00 && (_s[id].input&mask)!=0x00 )
         _s[id].IRR|= mask;
       mask<<= 1;
     }
-
+  
   // Intenta generar interrupció.
   out= false;
   for ( i= 0; i < 8 && !out; ++i )
@@ -247,7 +245,7 @@ update_out_fully_nested (
           if ( _s[id].special_mask_mode ) continue;
           else                            break;
         }
-      if ( (_s[id].IRR&mask) != 0x00 )
+      if ( ((_s[id].IRR&(~_s[id].IMR))&mask) != 0x00 )
         {
           out= true;
           _s[id].last_irq= irq;
