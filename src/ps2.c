@@ -86,7 +86,6 @@ static struct
   {
     bool enabled;
     bool irq_enabled;
-    bool clock_enabled;
     bool translation_enabled;
   }       ports[2];
   enum {
@@ -96,6 +95,7 @@ static struct
     WAITING_BYTE_OUTPUT_PORT
   }       waiting;
   uint8_t pending_cmd;
+  bool    pending_irq;
   
 } _controller;
 
@@ -186,6 +186,27 @@ static struct
 /* FUNCIONS PRIVADES */
 /*********************/
 
+static void
+update_transmission_state (void)
+{
+
+  bool pending;
+
+
+  pending=
+    (_kbd.buf.N > 0 && _controller.ports[0].enabled) ||
+    (_mouse.buf.N > 0 && _controller.ports[1].enabled)
+    ;
+  if ( _timing.bit_counter == -1 )
+    {
+      if ( pending ) _timing.bit_counter= 0;
+    }
+  else if ( !pending )
+    _timing.bit_counter= -1;
+  
+} // end update_transmission_state
+
+
 // Definicions
 static void
 kbd_buffer_add_scancode (
@@ -260,8 +281,7 @@ buffer_add (
 
   b->v[(b->p+b->N)%BSIZE]= data;
   ++(b->N);
-  if ( _timing.bit_counter == -1 ) // Prepara transmissió.
-    _timing.bit_counter= 0;
+  update_transmission_state ();
   
   return true;
   
@@ -640,6 +660,8 @@ kbd_data_write (
   uint8_t tmp[2];
 
 
+  // NOTA!!! He decidit canviar d'estratègia, i de moment no habilita.
+  //
   // No sé molt bé com interpretar aquest apunt que he trobat:
   //
   //  (PS/2) Command 0xad: Disable keyboard
@@ -647,7 +669,8 @@ kbd_data_write (
   //    Disable the keyboard clock line and set bit 4 of the Command
   //    byte. Any keyboard command enables the keyboard again.
   //
-  if ( !_controller.ports[0].enabled )
+  /*
+    if ( !_controller.ports[0].enabled )
     {
       if ( _kbd.state == KBD_WAIT_CMD ) _controller.ports[0].enabled= true;
       else
@@ -655,6 +678,15 @@ kbd_data_write (
                    "PS/2: s'ha enviat el byte %02X al teclat"
                    " metre este estava desactivat",
                    data );
+    }
+  */
+  if ( !_controller.ports[0].enabled )
+    {
+      _warning ( _udata,
+                 "PS/2: s'ha enviat el byte %02X al teclat"
+                 " metre este estava desactivat",
+                 data );
+      return;
     }
   
   switch ( _kbd.state )
@@ -834,6 +866,7 @@ mouse_data_write (
 
   
   // No sé molt bé com interpretar el enabled. Faig el mateix que en el teclat.
+  /*
   if ( !_controller.ports[1].enabled )
     {
       if ( _mouse.state == MOUSE_WAIT_CMD ) _controller.ports[1].enabled= true;
@@ -842,6 +875,15 @@ mouse_data_write (
                    "PS/2: s'ha enviat el byte %02X al ratolí"
                    " metre este estava desactivat",
                    data );
+    }
+  */
+  if ( !_controller.ports[1].enabled )
+    {
+      _warning ( _udata,
+                 "PS/2: s'ha enviat el byte %02X al ratolí"
+                 " metre este estava desactivat",
+                 data );
+      return;
     }
   
   switch ( _mouse.state )
@@ -1020,6 +1062,62 @@ mouse_get_sample (void)
 
 
 static void
+try_set_irq_signal (void)
+{
+  
+  if ( !_controller.pending_irq && _controller.outbuff_full )
+    {
+      if ( _controller.outbuff_source == 0 &&
+           _controller.ports[0].irq_enabled )
+        {
+          _controller.pending_irq= true;
+          PC_ic_irq ( 1, true );
+        }
+      else if ( _controller.outbuff_source == 1 &&
+                _controller.ports[1].irq_enabled )
+        {
+          _controller.pending_irq= true;
+          PC_ic_irq ( 12, true );
+        }
+    }
+  
+} // end try_set_irq_sinal
+
+
+static void
+enable_port (
+             const int port,
+             const bool value
+             )
+{
+
+  if ( value == _controller.ports[port].enabled ) return;
+  if ( value )
+    {
+      if ( _controller.ports[port].irq_enabled )
+        try_set_irq_signal ();
+    }
+  /* // Lo de buidar el buffer al final he decidit no fer-ho.
+  else
+    {
+      if ( _controller.outbuff_full && _controller.outbuff_source == port )
+        {
+          _controller.outbuff_full= false;
+          if ( _controller.pending_irq )
+            {
+              PC_ic_irq ( port == 0 ? 1 : 12, false );
+              _controller.pending_irq= false;
+            }
+        }
+    }
+  */
+  _controller.ports[port].enabled= value;
+  update_transmission_state ();
+    
+} // end disable_port
+
+
+static void
 run_pending_command (void)
 {
 
@@ -1039,14 +1137,10 @@ run_pending_command (void)
       _controller.ports[0].irq_enabled= ((data&0x01)!=0);
       _controller.ports[1].irq_enabled= ((data&0x02)!=0);
       _controller.system_flag= ((data&0x04)!=0);
-      _controller.ports[0].clock_enabled= ((data&0x10)==0);
-      if(_controller.ports[0].clock_enabled)
-        PC_MSG("PS/2 - First PS/2 port clock");
-      _controller.ports[1].clock_enabled= ((data&0x20)==0);
-      if(_controller.ports[1].clock_enabled)
-        PC_MSG("PS/2 - Second PS/2 port clock");
       _controller.ports[0].translation_enabled= ((data&0x40)!=0);
       _controller.waiting= WAITING_NONE;
+      enable_port ( 0, ((data&0x10)==0) );
+      enable_port ( 1, ((data&0x20)==0) );
       break;
       
     default:
@@ -1078,7 +1172,7 @@ fill_outbuff (void)
   //prev_state= _controller.outbuff_full;
   
   // Primer intenta del teclat
-  if ( _kbd.buf.N > 0 )
+  if ( _kbd.buf.N > 0 && _controller.ports[0].enabled )
     {
       _controller.outbuff_full= true;
       _controller.outbuff= buffer_read ( &_kbd.buf );
@@ -1087,7 +1181,7 @@ fill_outbuff (void)
     }
 
   // Segon el dispositiu
-  else if ( _mouse.buf.N > 0 )
+  else if ( _mouse.buf.N > 0 && _controller.ports[1].enabled )
     {
       _controller.outbuff_full= true;
       _controller.outbuff= buffer_read ( &_mouse.buf );
@@ -1113,7 +1207,6 @@ clock (
 {
   
   int cc,tmp,clocks,n,key;
-  bool irq_kbd,irq_mouse;
   
   
   // Processa cicles
@@ -1140,35 +1233,14 @@ clock (
   // Transmiteix bits a outbuff
   // NOTA!! no sé molt bé com gestionar el tema de les interrupcions
   // ací. Vaig a forçar un pols
-  irq_kbd= irq_mouse= false;
-  if ( _timing.bit_counter >= 8 && (_kbd.buf.N > 0 || _mouse.buf.N > 0) )
+  //irq_kbd= irq_mouse= false;
+  if ( _timing.bit_counter >= 8 &&
+       ((_kbd.buf.N > 0 && _controller.ports[0].enabled)||
+        (_mouse.buf.N > 0 && _controller.ports[1].enabled)) )
     {
       _timing.bit_counter-= 8;
-      if ( fill_outbuff () )
-        {
-          if ( _controller.outbuff_source == 0 )
-            {
-              if ( _controller.ports[0].irq_enabled )
-                {
-                  if ( !irq_kbd )
-                    { PC_ic_irq ( 1, true );
-                      PC_ic_irq ( 1, false ); }
-                  irq_kbd= true;
-                }
-            }
-          else
-            {
-              if ( _controller.ports[1].irq_enabled )
-                {
-                  if ( !irq_mouse )
-                    { PC_ic_irq ( 12, true );
-                      PC_ic_irq ( 12, false ); }
-                  irq_mouse= true;
-                }
-            }
-        }
-      if ( _kbd.buf.N == 0 && _mouse.buf.N == 0 )
-        _timing.bit_counter= -1;
+      if ( fill_outbuff () ) try_set_irq_signal ();
+      update_transmission_state ();
     }
   assert ( _timing.bit_counter < 8 );
 
@@ -1246,11 +1318,11 @@ PC_ps2_init (
     {
       _controller.ports[i].enabled= false;
       _controller.ports[i].irq_enabled= false;
-      _controller.ports[i].clock_enabled= false;
       _controller.ports[i].translation_enabled= false;
     }
   _controller.waiting= WAITING_NONE;
   _controller.pending_cmd= 0x00;
+  _controller.pending_irq= false;
   
   // Keyboard.
   kbd_init ();
@@ -1296,11 +1368,11 @@ PC_ps2_reset (void)
     {
       _controller.ports[i].enabled= false;
       _controller.ports[i].irq_enabled= false;
-      _controller.ports[i].clock_enabled= false;
       _controller.ports[i].translation_enabled= false;
     }
   _controller.waiting= WAITING_NONE;
   _controller.pending_cmd= 0x00;
+  _controller.pending_irq= false;
   
   // Keyboard.
   kbd_init ();
@@ -1367,7 +1439,7 @@ PC_ps2_data_write (
   switch ( _controller.waiting )
     {
     case WAITING_NEXT_COMMAND_BYTE:
-      _controller.data_is_command= true;
+      //_controller.data_is_command= true;
       run_pending_command ();
       break;
     case WAITING_BYTE_PORT2:
@@ -1407,6 +1479,14 @@ PC_ps2_data_read (void)
   // s'esborra
   ret= _controller.outbuff;
   _controller.outbuff_full= false;
+  if ( _controller.pending_irq )
+    {
+      if ( _controller.outbuff_source == 0 )
+        PC_ic_irq ( 1, false );
+      else
+        PC_ic_irq ( 12, false );
+      _controller.pending_irq= false;
+    }
   /*
   if ( _controller.outbuff_full )
     {
@@ -1446,7 +1526,7 @@ PC_ps2_status (void)
     // 7 - Parity error (0 = no error, 1 = parity error)
     // 6 - Time-out error (0 = no error, 1 = time-out error)
     // 5 - Auxiliary output buffer full
-    (_controller.outbuff_source==1 ? 0x20 : 0x00) |
+    (_controller.outbuff_full && _controller.outbuff_source==1 ? 0x20 : 0x00) |
     // 4 - Unknown (chipset specific)
     // 3 - Command/data
     (_controller.data_is_command ? 0x08 : 0x00) |
@@ -1475,6 +1555,11 @@ PC_ps2_command (
   // IRQ quan dese un valor en el outbuff. Per simplificat he decidit
   // no generar-lo.
 
+  // NOTA!! Segons O/S Dev el '_controller.data_is_command' és per
+  // diferenciar dins de PC_ps2_data_write', però en altres
+  // documentacions és simplement per diferènciar entre
+  // 'PC_ps2_command' i 'PC_ps2_data_write'.
+  _controller.data_is_command= true;
   _controller.waiting= WAITING_NONE;
   switch ( data )
     {
@@ -1488,7 +1573,7 @@ PC_ps2_command (
       
       // Disable second PS/2 port
     case 0xa7:
-      _controller.ports[1].enabled= false;
+      enable_port ( 1, false );
       break;
 
       // Test PS/2 Controller
@@ -1504,11 +1589,11 @@ PC_ps2_command (
       
       // Disable first PS/2 port 
     case 0xad:
-      _controller.ports[0].enabled= false;
+      enable_port ( 0, false );
       break;
       // Enable first PS/2 port 
     case 0xae:
-      _controller.ports[0].enabled= true;
+      enable_port ( 0, true );
       break;
 
       // Write next byte to Controller Output Port
