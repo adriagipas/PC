@@ -1707,6 +1707,11 @@ PC_sb16_mixer_write_data (
                           const uint8_t data
                           );
 
+uint8_t
+PC_sb16_mixer_direct (
+                      const uint8_t addr
+                      );
+
 
 /*******/
 /* I/O */

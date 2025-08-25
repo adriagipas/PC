@@ -481,6 +481,12 @@ port_read8 (
       ret= PC_sb16_dsp_ack_dma16_irq ();
       PC_Clock+= _delay_ISA;
       break;
+
+      // SB16?? Accès directe al registre 0x82 del mixer???
+    case 0x02a2:
+      ret= PC_sb16_mixer_direct ( (uint8_t) (port-0x220) );
+      PC_Clock+= _delay_ISA;
+      break;
       
       // ¿¿???
     case 0x0236:
@@ -524,7 +530,6 @@ port_read8 (
       break;
 
       // ???
-    case 0x02a2:
     case 0x02c8:
       _warning ( _udata, "port_read8 - port %04X desconegut", port );
       ret= 0xFF;
@@ -763,9 +768,14 @@ port_read16 (
       _warning ( _udata, "port_read16 - port %04X desconegut", port );
       ret= 0xffff;
       break;
+      
+      // SB16?? Accès directe al registre 0x82 del mixer???
+    case 0x02a2:
+      ret= (uint16_t) PC_sb16_mixer_direct ( (uint8_t) (port-0x220) );
+      PC_Clock+= _delay_ISA;
+      break;
 
       // ¿¿¿?????
-    case 0x02a2:
     case 0x02b2:
       _warning ( _udata, "port_read16 - port %04X desconegut", port );
       ret= 0xffff;
@@ -1225,6 +1235,16 @@ port_write8_base (
       PC_sb16_fm_write_data ( data, 0 );
       PC_Clock+= _delay_ISA;
       break;
+      /* // <-- Deuria ser açò????
+    case 0x038a:
+      PC_sb16_fm_set_addr ( data, 1 );
+      PC_Clock+= _delay_ISA;
+      break;
+    case 0x038b:
+      PC_sb16_fm_write_data ( data, 1 );
+      PC_Clock+= _delay_ISA;
+      break;
+      */
       // ¿¿???
     case 0x038a:
     case 0x038b:

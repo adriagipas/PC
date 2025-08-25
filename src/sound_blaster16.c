@@ -2610,6 +2610,8 @@ dsp_run_command (void)
       //_dsp.format.timec_reg= _dsp.in.args[0];
       tmpd= 65536.0 - ((((uint32_t) _dsp.in.args[0])<<8)|0xff);
       tmpd= 256000000.0 / tmpd;
+      //tmpd= 256.0 - _dsp.in.args[0]; // <-- Alternativa lleugerament diferent.
+      //tmpd= 1000000.0/tmpd;
       if ( !_dsp.format.mono ) tmpd/= 2;
       _dsp.format.freq= tmpd;
       dsp_update_format ();
@@ -2770,13 +2772,17 @@ dsp_run_command (void)
       
     case 0xe0: // DSP Identification. Comandament sols suportat per
                // SB2.0 (L'utilitzen per a identificar si és una
-               // SB2.0. He decidit implementar-lo encara que siga SB16.
-      dsp_out_add ( _dsp.in.args[0]^0xff );
+               // SB2.0. He decidit implementar-lo encara que siga una
+               // SB16.
+      dsp_out_add ( _dsp.in.args[0]^0xff ); 
+      //dsp_out_add ( _dsp.in.args[0] ); // <-- Podria considerar fer
+                                         //     que fallara?
       break;
 
-    case 0xe1: // Get DSP version number (V4.13)
+    case 0xe1: // Get DSP version number (V4.4)
       dsp_out_add ( 0x04 );
-      dsp_out_add ( 0x0d );
+      dsp_out_add ( 0x04 ); // <-- Abans 0x0d (V4.13) (No ens flipem
+                            //     que no tinc ASP ni altres coses)
       break;
     case 0xe2: // DMA Identification.
       // Aparentment, és un comandament estrany que inicia una
@@ -3290,13 +3296,15 @@ mixer_init (void)
 
 
 static uint8_t
-mixer_read_data (void)
+mixer_read_data (
+                 const uint8_t addr
+                 )
 {
 
   uint8_t ret;
 
   
-  switch ( _mixer.addr )
+  switch ( addr )
     {
 
     case 0x00: // Reset mixer 
@@ -4328,7 +4336,7 @@ PC_sb16_mixer_read_data (void)
 
   
   clock ( true ); // Necessari??
-  ret= mixer_read_data ();
+  ret= mixer_read_data ( _mixer.addr );
   update_cc_to_event ();
   
   return ret;
@@ -4347,3 +4355,25 @@ PC_sb16_mixer_write_data (
   update_cc_to_event ();
   
 } // end PC_sb16_mixer_write_data
+
+
+// NOTA!!! Açò clarament està mal. La manera correcta d'accedir als
+// registres del mixer no és aquesta. Però en l'instal·lado del
+// Sam&Max clarament intenta accedir al registre 0x82 (estat
+// interrupcions) directament. En realitat crec que funciona igual
+// però per si de cas ho he implementat.
+uint8_t
+PC_sb16_mixer_direct (
+                      const uint8_t addr
+                      )
+{
+
+  uint8_t ret;
+
+  
+  clock ( true );
+  ret= mixer_read_data ( addr );
+
+  return ret;
+  
+} // end PC_sb16_mixer_direct
