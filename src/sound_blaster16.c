@@ -2772,11 +2772,10 @@ dsp_run_command (void)
       
     case 0xe0: // DSP Identification. Comandament sols suportat per
                // SB2.0 (L'utilitzen per a identificar si és una
-               // SB2.0. He decidit implementar-lo encara que siga una
-               // SB16.
-      dsp_out_add ( _dsp.in.args[0]^0xff ); 
-      //dsp_out_add ( _dsp.in.args[0] ); // <-- Podria considerar fer
-                                         //     que fallara?
+               // SB2.0. He decidit implementar-lo però fer que
+               // falle. Açò pareix que és important per a MI1CD.
+      //dsp_out_add ( _dsp.in.args[0]^0xff ); // <-- Comportament esperat.
+      dsp_out_add ( _dsp.in.args[0] );
       break;
 
     case 0xe1: // Get DSP version number (V4.4)

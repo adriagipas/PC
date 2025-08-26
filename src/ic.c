@@ -119,14 +119,21 @@ input_changed (
   int id;
 
 
-  // Ací es calcula el el edge triggered mode.
+  // Activa el IRR corresponent
   id= irq/8;
   mask= (0x1<<(irq%8));
-  // Comprova edge/triggered
-  if ( (_elcr[id]&mask)==0x00 && (_s[id].input&mask)==0x00 && in )
-    _s[id].IRR|= mask;
-  if ( in ) _s[id].input|= mask;
-  else      _s[id].input&= ~mask;
+  if ( in )
+    {
+      // NOTA!! Açò no és del tot redundant amb el que es fa en
+      // update_state. Ací és l'únic lloc on es pot detectar el
+      // edge/triggered. Mentre que en update_state es detecten tots
+      // els leveled.
+      // O no és edge/triggered o hi ha un edge/triggered
+      if ( (_elcr[id]&mask)!=0x00 || (_s[id].input&mask)==0x00 )
+        _s[id].IRR|= mask;
+      _s[id].input|= mask;
+    }
+  else _s[id].input&= ~mask;
   
 } // end input_changed
 
@@ -223,9 +230,8 @@ update_out_fully_nested (
   bool out;
   
 
-  // NOTA!! ara que el IMR s'aplica a l'eixida del IRR, com ha de
-  // ser, tal vegada es podria moure el IRR a input_changed. Però per
-  // si de cas ho deixe ací.
+  // Torna a comprovar els leveled. Té sentit perquè igual ha canviat
+  // el elcr.
   mask= 0x01;
   for ( i= 0; i < 8; ++i )
     {
